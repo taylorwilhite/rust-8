@@ -23,7 +23,7 @@ pub struct Cpu {
   stack: [u16; 16],
   sp: u16,
   // Graphics (64 x 32 pixel screen)
-  gfx: [u8; 2048]
+  vram: [[u8; 64]; 32]
 }
 
 impl Cpu {
@@ -38,7 +38,7 @@ impl Cpu {
       sound_timer: 0,
       stack: [0; 16],
       sp: 0,
-      gfx: [0; 2048]
+      vram: [[0; 64]; 32]
     }
   }
 
@@ -53,6 +53,7 @@ impl Cpu {
     self.sound_timer = 0;
     self.stack = [0; 16];
     self.sp = 0;
+    self.vram = [[0; 64]; 32];
 
     for i in 0..80 {
       self.memory[i] = FONT_SET[i];
