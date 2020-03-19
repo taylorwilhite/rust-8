@@ -23,7 +23,9 @@ pub struct Cpu {
   stack: [u16; 16],
   sp: u16,
   // Graphics (64 x 32 pixel screen)
-  vram: [[u8; 64]; 32]
+  vram: [[u8; 64]; 32],
+  // flag for screen drawing
+  draw_flag: bool
 }
 
 impl Cpu {
@@ -38,7 +40,8 @@ impl Cpu {
       sound_timer: 0,
       stack: [0; 16],
       sp: 0,
-      vram: [[0; 64]; 32]
+      vram: [[0; 64]; 32],
+      draw_flag: false
     }
   }
 
@@ -54,6 +57,7 @@ impl Cpu {
     self.stack = [0; 16];
     self.sp = 0;
     self.vram = [[0; 64]; 32];
+    self.draw_flag = false;
 
     for i in 0..80 {
       self.memory[i] = FONT_SET[i];
@@ -71,11 +75,29 @@ impl Cpu {
 
   pub fn decode_opcode(&mut self, opcode: u16) {
     // TODO: Add opcode details
+    let segs = (
+      (opcode & 0xF000) >> 12 as u8,
+      (opcode & 0x0F00) >> 8 as u8,
+      (opcode & 0x00F0) >> 4 as u8,
+      (opcode & 0x000F) as u8,
+    );
+
+    match segs {
+      (0x00, 0x00, 0x0e, 0x00) => self.run_00e0(),
+      _ => panic!("failed to account for opcode: {}", opcode)
+    }
   }
 
   pub fn emulate_cycle(&mut self) {
     self.opcode = get_opcode(self.memory, self.pc);
     self.decode_opcode(self.opcode);
     self.decrement_timers();
+  }
+
+  // CLS: clears the screen
+  pub fn run_00e0(&mut self) {
+    self.vram = [[0; 64]; 32];
+    self.draw_flag = true;
+    self.pc += 2;
   }
 }
