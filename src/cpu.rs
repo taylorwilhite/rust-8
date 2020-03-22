@@ -2,11 +2,15 @@ use crate::font_set::FONT_SET;
 use std::fs::File;
 use std::io::Read;
 
-pub fn get_opcode(memory: [u8; 4096], index: u16) -> u16 {
+fn get_opcode(memory: [u8; 4096], index: u16) -> u16 {
   (memory[index as usize] as u16) << 8
     | (memory[(index + 1) as usize] as u16)
 }
 
+pub struct VramInfo {
+  pub draw: bool,
+  pub vram: [[u8; 64]; 32]
+}
 pub struct Cpu {
   // Memory
   memory: [u8; 4096],
@@ -101,10 +105,14 @@ impl Cpu {
     }
   }
 
-  pub fn emulate_cycle(&mut self) {
+  pub fn emulate_cycle(&mut self) -> VramInfo {
     self.opcode = get_opcode(self.memory, self.pc);
     self.decode_opcode(self.opcode);
     self.decrement_timers();
+    VramInfo {
+      draw: self.draw_flag,
+      vram: self.vram
+    }
   }
 
   // CLS: clears the screen
