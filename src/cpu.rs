@@ -1,4 +1,6 @@
 use crate::font_set::FONT_SET;
+use std::fs::File;
+use std::io::Read;
 
 pub fn get_opcode(memory: [u8; 4096], index: u16) -> u16 {
   (memory[index as usize] as u16) << 8
@@ -61,6 +63,17 @@ impl Cpu {
 
     for i in 0..80 {
       self.memory[i] = FONT_SET[i];
+    }
+  }
+
+  pub fn load(&mut self, filename: &str) {
+    let mut f = File::open(filename).expect("Could not find file");
+    let mut rom = [0u8; 3584];
+    f.read(&mut rom).expect("error reading file");
+
+    for (i, &byte) in rom.iter().enumerate() {
+      let addr = 0x200 + i;
+      self.memory[addr] = byte;
     }
   }
 
