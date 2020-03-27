@@ -99,8 +99,13 @@ impl Cpu {
       (opcode & 0x000F) as u8,
     );
 
+    let nnn = opcode & 0x0FFF;
+
     match segs {
       (0x00, 0x00, 0x0e, 0x00) => self.run_00e0(),
+      (0x00, 0x00, 0x0e, 0x0e) => self.run_00ee(),
+      (0x01, _, _, _) => self.run_1nnn(nnn),
+      (0x02, _, _, _) => self.run_2nnn(nnn),
       _ => panic!("failed to account for opcode: {}", opcode)
     }
   }
@@ -120,5 +125,23 @@ impl Cpu {
     self.vram = [[0; 64]; 32];
     self.draw_flag = true;
     self.pc += 2;
+  }
+
+  // RET: returns from a subroutine
+  pub fn run_00ee(&mut self) {
+    self.pc = self.stack[self.sp as usize];
+    self.sp -= 1;
+  }
+
+  // JP: jump to location addr
+  pub fn run_1nnn(&mut self, nnn: u16) {
+    self.pc = nnn;
+  }
+
+  // CALL: call subroutine at nnn
+  pub fn run_2nnn(&mut self, nnn: u16) {
+    self.sp += 1;
+    self.stack[self.sp as usize] = self.pc;
+    self.pc = nnn;
   }
 }
