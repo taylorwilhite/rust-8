@@ -100,12 +100,29 @@ impl Cpu {
     );
 
     let nnn = opcode & 0x0FFF;
+    let kk = (opcode & 0x00FF) as u8;
+    let x = segs.1 as usize;
+    let y = segs.2 as usize;
 
     match segs {
       (0x00, 0x00, 0x0e, 0x00) => self.run_00e0(),
       (0x00, 0x00, 0x0e, 0x0e) => self.run_00ee(),
       (0x01, _, _, _) => self.run_1nnn(nnn),
       (0x02, _, _, _) => self.run_2nnn(nnn),
+      (0x03, _, _, _) => self.run_3xkk(x, kk),
+      (0x04, _, _, _) => self.run_4xkk(x, kk),
+      (0x05, _, _, 0x00) => self.run_5xy0(x, y),
+      (0x06, _, _, _) => self.run_6xkk(x, kk),
+      (0x07, _, _, _) => self.run_7xkk(x, kk),
+      (0x08, _, _, 0x00) => self.run_8xy0(x, y),
+      (0x08, _, _, 0x01) => self.run_8xy1(x, y),
+      (0x08, _, _, 0x02) => self.run_8xy2(x, y),
+      (0x08, _, _, 0x03) => self.run_8xy3(x, y),
+      (0x08, _, _, 0x04) => self.run_8xy4(x, y),
+      (0x08, _, _, 0x05) => self.run_8xy5(x, y),
+      (0x08, _, _, 0x06) => self.run_8xy6(x),
+      (0x08, _, _, 0x07) => self.run_8xy7(x, y),
+      (0x08, _, _, 0x0e) => self.run_8xye(x),
       _ => panic!("failed to account for opcode: {}", opcode)
     }
   }
@@ -143,5 +160,97 @@ impl Cpu {
     self.sp += 1;
     self.stack[self.sp as usize] = self.pc;
     self.pc = nnn;
+  }
+
+  // SE Vx: skip next instruction if register x equals kk
+  pub fn run_3xkk(&mut self, x: usize, kk: u8) {
+    if self.v[x] == kk {
+      self.pc += 4;
+    }
+  }
+
+  // SNE Vx: Skip next instruction if register x does not equal kk
+  pub fn run_4xkk(&mut self, x: usize, kk: u8) {
+    if self.v[x] != kk {
+      self.pc += 4;
+    }
+  }
+
+  // SE Vx Vy: Skip next instruction if regeister x does not equal register y
+  pub fn run_5xy0(&mut self, x: usize, y: usize) {
+    if self.v[x] == self.v[y] {
+      self.pc += 4;
+    }
+  }
+
+  // LD Vx: set Vx equal to kk
+  pub fn run_6xkk(&mut self, x: usize, kk: u8) {
+    self.v[x] = kk;
+    self.pc += 2
+  }
+
+  // ADD Vx: adds the value of kk to Vx
+  pub fn run_7xkk(&mut self, x: usize, kk: u8) {
+    self.v[x] += kk;
+    self.pc += 2;
+  }
+
+  // LD Vx Vy: Set value of Vx to value of Vy
+  pub fn run_8xy0(&mut self, x: usize, y: usize) {
+    self.v[x] = self.v[y];
+    self.pc += 2;
+  }
+
+  //OR Vx Vy: Set value of Vx to bitwise OR of Vx and Vy
+  pub fn run_8xy1(&mut self, x: usize, y: usize) {
+    self.v[x] = self.v[x] | self.v[y];
+    self.pc += 2;
+  }
+
+  //And Vx Vy: Set Vx equal to bitwise AND of Vx and Vy
+  pub fn run_8xy2(&mut self, x: usize, y: usize) {
+    self.v[x] = self.v[x] & self.v[y];
+    self.pc += 2;
+  }
+
+  // XOR Vx Vy: Set Vx equal to bitwise XOR of Vx and Vy
+  pub fn run_8xy3(&mut self, x: usize, y: usize) {
+    self.v[x] = self.v[x] ^ self.v[y];
+    self.pc += 2;
+  }
+
+  // ADD Vx Vy: add vy to vx, carry if over 255
+  pub fn run_8xy4(&mut self, x: usize, y: usize) {
+    self.v[x] = (self.v[x] + self.v[y]) as u8;
+    self.v[0x0F] = if self.v[x] > 0x0F { 1 } else { 0 };
+    self.pc += 2;
+  }
+
+  // SUB Vx Vy: Subtract Vx from Vy, carry if under 0
+  pub fn run_8xy5(&mut self, x: usize, y: usize) {
+    self.v[0x0F] = if self.v[x] > self.v[y] { 1 } else { 0 };
+    self.v[x] = self.v[x].wrapping_sub(self.v[y]);
+    self.pc += 2;
+  }
+
+  // SHR Vx: set Vf to last bit of Vx, then divide V[x]
+  pub fn run_8xy6(&mut self, x: usize ) {
+    self.v[0x0F] = self.v[x] & 1;
+    self.v[x] >>= 1;
+    self.pc += 2;
+  }
+
+  // SUBN Vx Vy: set Vx to Vy minus Vx, carry if under 0
+  pub fn run_8xy7(&mut self, x: usize, y:usize) {
+    self.v[0x0F] = if self.v[x] < self.v[y] { 1 } else { 0 };
+    self.v[x] = self.v[y].wrapping_sub(self.v[x]);
+    self.pc += 2;
+  }
+
+  // SHL Vx: set Vf to most sig digit of Vx, then multiply Vx by 2
+  pub fn run_8xye(&mut self, x: usize) {
+    self.v[0x0F] = (self.v[x] & 0b10000000) >> 7;
+    self.v[x] <<= 1;
+    self.pc += 2;
   }
 }
