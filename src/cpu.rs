@@ -1,6 +1,8 @@
 use crate::font_set::FONT_SET;
 use std::fs::File;
 use std::io::Read;
+use rand;
+use rand::Rng;
 
 fn get_opcode(memory: [u8; 4096], index: u16) -> u16 {
   (memory[index as usize] as u16) << 8
@@ -123,6 +125,10 @@ impl Cpu {
       (0x08, _, _, 0x06) => self.run_8xy6(x),
       (0x08, _, _, 0x07) => self.run_8xy7(x, y),
       (0x08, _, _, 0x0e) => self.run_8xye(x),
+      (0x09, _, _, 0x00) => self.run_9xy0(x, y),
+      (0x0a, _, _, _) => self.run_annn(nnn),
+      (0x0b, _, _, _) => self.run_bnnn(nnn),
+      (0x0c, _, _, _) => self.run_cxkk(x, kk),
       _ => panic!("failed to account for opcode: {}", opcode)
     }
   }
@@ -166,6 +172,8 @@ impl Cpu {
   pub fn run_3xkk(&mut self, x: usize, kk: u8) {
     if self.v[x] == kk {
       self.pc += 4;
+    } else {
+      self.pc += 2;
     }
   }
 
@@ -173,6 +181,8 @@ impl Cpu {
   pub fn run_4xkk(&mut self, x: usize, kk: u8) {
     if self.v[x] != kk {
       self.pc += 4;
+    } else {
+      self.pc += 2
     }
   }
 
@@ -180,6 +190,8 @@ impl Cpu {
   pub fn run_5xy0(&mut self, x: usize, y: usize) {
     if self.v[x] == self.v[y] {
       self.pc += 4;
+    } else {
+      self.pc += 2;
     }
   }
 
@@ -252,5 +264,45 @@ impl Cpu {
     self.v[0x0F] = (self.v[x] & 0b10000000) >> 7;
     self.v[x] <<= 1;
     self.pc += 2;
+  }
+
+  // SNE Vx Vy: Skip next instruction if Vx is not equal to Vy
+  pub fn run_9xy0(&mut self, x: usize, y: usize) {
+    if self.v[x] != self.v[y] {
+      self.pc += 4;
+    } else {
+      self.pc += 2;
+    }
+  }
+
+  // LD I: set value of register I to nnn
+  pub fn run_annn(&mut self, nnn: u16) {
+    self.i = nnn;
+    self.pc += 2;
+  }
+
+  // JP v0: set value of pc to nnn + v0
+  pub fn run_bnnn(&mut self, nnn: u16) {
+    self.pc = self.v[0] as u16 + nnn;
+  }
+
+  // RND Vx: set Vx to random byte plus kk
+  pub fn run_cxkk(&mut self, x: usize, kk: u8) {
+    let mut rng = rand::thread_rng();
+    self.v[x] = rng.gen::<u8>() & kk;
+    self.pc += 2;
+  }
+
+  // DRW: Draw pixels to the screen and check colision
+  pub fn run_dxyn(&mut self, x: usize, y: usize, n: usize) {
+    for byte in 0..n {
+      let y = (self.v[y] as usize + byte) % 32;
+      for bit in 0..8 {
+        let x = (self.v[x] as usize + bit) % 64;
+        let block = (self.memory[(self.i + byte as u16) as usize] >> (7 - bit)) & 1;
+        self.v[0x0F] |= block & self.vram[y][x];
+        self.vram[y][x] ^= block;
+      }
+    }
   }
 }
