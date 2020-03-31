@@ -304,5 +304,7 @@ impl Cpu {
         self.vram[y][x] ^= block;
       }
     }
+    self.draw_flag = true;
+    self.pc += 2;
   }
 }
