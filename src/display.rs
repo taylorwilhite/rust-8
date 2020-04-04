@@ -41,7 +41,7 @@ impl Display {
 
         self.canvas.set_draw_color(color(col));
         self.canvas
-          .fill_rect(Rect::new(x as i32, y as i32, SCALE, SCALE));
+          .fill_rect(Rect::new(x as i32, y as i32, SCALE, SCALE)).expect("something went wrong");
       }
     }
     self.canvas.present();

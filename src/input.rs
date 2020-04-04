@@ -1,15 +1,17 @@
 use sdl2;
 use sdl2::event::Event;
-use sdls::keyboard::Keycode;
+use sdl2::keyboard::Keycode;
 
 pub struct InputDriver {
   events: sdl2::EventPump,
+  pub keys: [bool; 16]
 }
 
 impl InputDriver {
   pub fn new(sdl_context: &sdl2::Sdl) -> Self {
     InputDriver {
-      events: sdl_context.event_pump().unwrap()
+      events: sdl_context.event_pump().unwrap(),
+      keys: [false; 16]
     }
   }
 
@@ -25,8 +27,6 @@ impl InputDriver {
       .pressed_scancodes()
       .filter_map(Keycode::from_scancode)
       .collect();
-
-    let mut chip8_keys = [false; 16];
 
     for key in keys {
       let index = match key {
@@ -50,10 +50,10 @@ impl InputDriver {
       };
 
       if let Some(i) = index {
-        chip8_keys[i] = true;
+        self.keys[i] = true;
       }
     }
 
-    Ok(chip8_keys)
+    Ok(self.keys)
   }
 }

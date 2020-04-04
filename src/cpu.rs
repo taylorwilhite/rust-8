@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::Read;
 use rand;
 use rand::Rng;
+use crate::input::InputDriver;
 
 fn get_opcode(memory: [u8; 4096], index: u16) -> u16 {
   (memory[index as usize] as u16) << 8
@@ -33,11 +34,13 @@ pub struct Cpu {
   // Graphics (64 x 32 pixel screen)
   vram: [[u8; 64]; 32],
   // flag for screen drawing
-  draw_flag: bool
+  draw_flag: bool,
+  // keyboard input
+  pub keypad: InputDriver
 }
 
 impl Cpu {
-  pub fn new() -> Cpu {
+  pub fn new(keypad: InputDriver) -> Cpu {
     Cpu {
       memory: [0; 4096],
       v: [0; 16],
@@ -49,7 +52,8 @@ impl Cpu {
       stack: [0; 16],
       sp: 0,
       vram: [[0; 64]; 32],
-      draw_flag: false
+      draw_flag: false,
+      keypad: keypad
     }
   }
 
@@ -105,6 +109,7 @@ impl Cpu {
     let kk = (opcode & 0x00FF) as u8;
     let x = segs.1 as usize;
     let y = segs.2 as usize;
+    let n = segs.3 as usize;
 
     match segs {
       (0x00, 0x00, 0x0e, 0x00) => self.run_00e0(),
@@ -129,6 +134,18 @@ impl Cpu {
       (0x0a, _, _, _) => self.run_annn(nnn),
       (0x0b, _, _, _) => self.run_bnnn(nnn),
       (0x0c, _, _, _) => self.run_cxkk(x, kk),
+      (0x0d, _, _, _) => self.run_dxyn(x, y, n),
+      (0x0e, _, 0x09, 0x0e) => self.run_ex9e(x),
+      (0x0e, _, 0x0A, 0x01) => self.run_exa1(x),
+      (0x0f, _, 0x00, 0x07) => self.run_fx07(x),
+      (0x0f, _, 0x00, 0x0a) => self.run_fx0a(x),
+      (0x0f, _, 0x01, 0x05) => self.run_fx15(x),
+      (0x0f, _, 0x01, 0x08) => self.run_fx18(x),
+      (0x0f, _, 0x01, 0x0e) => self.run_fx1e(x),
+      (0x0f, _, 0x02, 0x09) => self.run_fx29(x),
+      (0x0f, _, 0x03, 0x03) => self.run_fx33(x),
+      (0x0f, _, 0x05, 0x05) => self.run_fx55(x),
+      (0x0f, _, 0x06, 0x05) => self.run_fx65(x),
       _ => panic!("failed to account for opcode: {}", opcode)
     }
   }
@@ -203,7 +220,10 @@ impl Cpu {
 
   // ADD Vx: adds the value of kk to Vx
   pub fn run_7xkk(&mut self, x: usize, kk: u8) {
-    self.v[x] += kk;
+    let val = kk as u16;
+    let vx = self.v[x] as u16;
+    let result = val + vx;
+    self.v[x] = result as u8;
     self.pc += 2;
   }
 
@@ -307,5 +327,84 @@ impl Cpu {
     self.draw_flag = true;
     self.pc += 2;
   }
-  
+
+  // SKP Vx: Skip if key from value Vx is pressed
+  pub fn run_ex9e(&mut self, x: usize) {
+    if self.keypad.keys[self.v[x] as usize] {
+      self.pc += 2;
+    }
+    self.pc += 2;
+  }
+
+  // SKNP Vx: Skip if not pressed
+  pub fn run_exa1(&mut self, x: usize) {
+    if !self.keypad.keys[self.v[x] as usize] {
+      self.pc += 2;
+    }
+    self.pc += 2;
+  }
+
+  // LD Vx, DT: set vx to timer value
+  pub fn run_fx07(&mut self, x: usize) {
+    self.v[x] = self.delay_timer;
+    self.pc += 2;
+  }
+
+  //LD Vx, K: wait for keypress, set Vx to key value
+  pub fn run_fx0a(&mut self, x: usize) {
+    for (i,key) in self.keypad.keys.iter().enumerate() {
+      if *key {
+        self.v[x] = i as u8;
+        self.pc += 2;
+      }
+    }
+  }
+
+  // LD DT, Vx: set delay timer to Vx
+  pub fn run_fx15(&mut self, x: usize) {
+    self.delay_timer = self.v[x];
+    self.pc += 2;
+  }
+
+  // LD ST, Vx Set sound timer = Vx
+  pub fn run_fx18(&mut self, x: usize) {
+    self.sound_timer = self.v[x];
+    self.pc += 2;
+  }
+
+  // ADD I, Vx: Set I = I + Vx
+  pub fn run_fx1e(&mut self, x: usize) {
+    self.i += self.v[x] as u16;
+    self.pc += 2;
+  }
+
+  // LD F, Vx: Set I = location of sprite for digit Vx
+  pub fn run_fx29(&mut self, x: usize) {
+    self.i = self.v[x] as u16 * 5;
+    self.pc += 2;
+  }
+
+  // LD B, Vx: Store BCD representation of Vx in memory locations I, I+1, and I+2
+  pub fn run_fx33(&mut self, x: usize) {
+    self.memory[self.i as usize] = self.v[x] / 100;
+    self.memory[self.i as usize + 1] = (self.v[x] % 100) / 10;
+    self.memory[self.i as usize + 2] = self.v[x] % 10;
+    self.pc += 2;
+  }
+
+  // LD [I], Vx: Store registers V0 through Vx in memory starting at location I
+  pub fn run_fx55(&mut self, x: usize) {
+    for i in 0..x + 1 {
+      self.memory[self.i as usize + i] = self.v[i];
+    }
+    self.pc += 2;
+  }
+
+  // LD Vx, [I]: Read registers V0 through Vx from memory starting at location I
+  pub fn run_fx65(&mut self, x: usize) {
+    for i in 0..x + 1 {
+      self.v[i] = self.memory[self.i as usize + i]
+    }
+    self.pc += 2;
+  }
 }
