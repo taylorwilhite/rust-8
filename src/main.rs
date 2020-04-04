@@ -2,14 +2,17 @@ extern crate sdl2;
 mod cpu;
 mod font_set;
 mod display;
+mod input;
 
 use cpu::Cpu;
 use std::env;
 use display::Display;
+use input::InputDriver;
 fn main() {
   let mut chip8 = Cpu::new();
   let sdl_context = sdl2::init().unwrap();
   let mut chip8_display = Display::new(&sdl_context);
+  let mut chip8_keyboard = InputDriver::new(&sdl_context);
   let args: Vec<String> = env::args().collect();
   if args.len() < 2 {
     panic!("Please supply a filename!");
