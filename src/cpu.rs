@@ -253,8 +253,12 @@ impl Cpu {
 
   // ADD Vx Vy: add vy to vx, carry if over 255
   pub fn run_8xy4(&mut self, x: usize, y: usize) {
-    self.v[x] = (self.v[x] + self.v[y]) as u8;
-    self.v[0x0F] = if self.v[x] > 0x0F { 1 } else { 0 };
+    let (res, overflow) = self.v[x].overflowing_add(self.v[y]);
+    match overflow {
+      true => self.v[0xF] = 1,
+      false => self.v[0xF] = 0
+    }
+    self.v[x] = res;
     self.pc += 2;
   }
 
